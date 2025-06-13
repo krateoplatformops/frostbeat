@@ -58,7 +58,7 @@ func NewPodLogStreamer(ctx context.Context, opts PodLogStreamerOptions) *PodLogS
 		initialWait: opts.InitialWait,
 		ctx:         ctx,
 		log: opts.Logger.With(
-			slog.String("service", "pod-logs-streamer"),
+			slog.String("component", "pod-logs-streamer"),
 			slog.String("name", opts.PodName),
 			slog.String("namespace", opts.Namespace),
 		),

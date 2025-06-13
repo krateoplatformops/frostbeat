@@ -68,7 +68,10 @@ func NewPodLogManager(opts PodLogManagerOptions) *PodLogManager {
 
 		streamCancelMap: make(map[string]context.CancelFunc),
 
-		log: opts.Logger.With("service", "pod-logs-manager"),
+		log: opts.Logger.With(
+			slog.String("component", "pod-logs-manager"),
+			slog.String("namespace", opts.Namespace),
+		),
 	}
 }
 
