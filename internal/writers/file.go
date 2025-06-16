@@ -7,19 +7,19 @@ import (
 	"time"
 )
 
-type FileWriter struct {
-	File *os.File
-}
-
-func NewFileWriter(path string) (*FileWriter, error) {
+func File(path string) (LogWriter, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
 	}
-	return &FileWriter{File: f}, nil
+	return &fileWriterImpl{File: f}, nil
 }
 
-func (w *FileWriter) WriteBatch(batch []string) error {
+type fileWriterImpl struct {
+	File *os.File
+}
+
+func (w *fileWriterImpl) WriteBatch(batch []string) error {
 	for _, raw := range batch {
 		var data map[string]any
 		if err := json.Unmarshal([]byte(raw), &data); err != nil {

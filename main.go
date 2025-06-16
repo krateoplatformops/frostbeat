@@ -14,6 +14,7 @@ import (
 	"context"
 
 	"github.com/krateoplatformops/frostbeat/internal/manager"
+	etcdutil "github.com/krateoplatformops/frostbeat/internal/util/etcd"
 	"github.com/krateoplatformops/frostbeat/internal/writers"
 	"github.com/krateoplatformops/plumbing/env"
 	"github.com/krateoplatformops/plumbing/slogs/pretty"
@@ -40,6 +41,7 @@ func main() {
 	batchPeriod := flag.Duration("batch-period", env.Duration("BATCH_PERIOD", 3*time.Second), "Batch period")
 	namespace := flag.String("namespace", env.String("NAMESPACE", "demo-system"), "Namespace")
 	selector := flag.String("label-selector", env.String("SELECTOR", "app=snowplow"), "Pod label selector")
+	etcdServers := flag.String("etcd-servers", env.String("EVENTSSE_ETCD_SERVERS", "localhost:2379"), "etcd endpoints")
 
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), "Flags:")
@@ -97,11 +99,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	writer, err := writers.NewFileWriter("streamed-logs.txt")
+	etcdClient, err := etcdutil.NewEtcdClient(strings.Split(*etcdServers, ","))
 	if err != nil {
-		log.Error("unable to create stream writer", slog.Any("err", err))
+		log.Error("unable to create Etcd client", slog.Any("err", err))
 		os.Exit(1)
 	}
+	defer etcdClient.Close()
 
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
@@ -115,7 +118,7 @@ func main() {
 		BatchSize:     *batchSize,
 	})
 
-	err = manager.Start(ctx, &wg, writer)
+	err = manager.Start(ctx, &wg, writers.Etcd(etcdClient))
 	if err != nil {
 		log.Error("unable to start PodLogManager", slog.Any("err", err))
 		os.Exit(1)

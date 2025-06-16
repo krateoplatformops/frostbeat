@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frostbeat
+  namespace: demo-system
+  labels:
+    app: "frostbeat"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: "frostbeat"
+  template:
+    metadata:
+      labels:
+        app: "frostbeat"
+    spec:
+      serviceAccountName: frostbeat
+      volumes:
+        - emptyDir: {}
+          name: tmp-dir
+      containers:
+      - name: etcd
+        image: gcr.io/etcd-development/etcd:v3.6.1
+        command: ["etcd"]
+        args:
+        - --listen-client-urls=http://0.0.0.0:2379
+        - --advertise-client-urls=http://localhost:2379
+        - --listen-metrics-urls=http://0.0.0.0:2381
+        - --data-dir=/tmp
+        - --name=frostbeat-etcd
+        ports:
+        - containerPort: 2379
+          hostPort: 2379
+          protocol: TCP
+      - name: frostbeat
+        image: kind.local/frostbeat:latest
+        imagePullPolicy: Never
+        args:
+        - --etcd-servers=http://localhost:2379
+        - --debug=true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-dir
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
