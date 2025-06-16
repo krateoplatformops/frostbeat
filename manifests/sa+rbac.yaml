@@ -1,0 +1,31 @@
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: frostbeat
+  namespace: demo-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: frostbeat-role
+  namespace: demo-system
+rules:
+  - apiGroups: [""]
+    resources: 
+      - "pods"
+      - "pods/log"
+    verbs: ["get", "list", "watch"]
+--- 
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: frostbeat-rolebinding
+  namespace: demo-system
+subjects:
+  - kind: ServiceAccount
+    name: frostbeat
+    namespace: demo-system
+roleRef:
+  kind: Role
+  name: frostbeat-role
+  apiGroup: rbac.authorization.k8s.io  
