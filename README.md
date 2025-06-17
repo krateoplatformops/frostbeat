@@ -14,8 +14,8 @@ It supports:
 * Dynamic watching of pods: automatically starts/stops log streaming as pods appear or disappear
 * Graceful shutdown with context and signal handling
 * Pluggable writer interface - write logs to any destination, such as:
+  - Etcd (**default**)
   - Files (local or mounted volume)
-  - etcd
   - ElasticSearch
   - Kafka
   - Cloud storage (e.g. GCS, S3)
@@ -85,3 +85,12 @@ In the context of the overall system:
 
 ![Pod Log Manager Flow](./_diagrams/pod-log-manager-flow.png)
 
+## Env Vars
+
+| Environment Variable | Default Value     | Description                                                  |
+|----------------------|-------------------|--------------------------------------------------------------|
+| BATCH_SIZE           | 20                | Maximum number of log entries to send in a single batch.     |
+| BATCH_PERIOD         | 5s                | Maximum time to wait before flushing a batch.                |
+| NAMESPACE            | demo-system       | Kubernetes namespace to watch for pods and collect logs from.|
+| SELECTOR             | app=snowplow      | Label selector to filter pods for log collection.            |
+| ETCD_SERVERS         | localhost:2379    | Comma-separated list of etcd endpoints for log storage.      |
