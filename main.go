@@ -21,7 +21,6 @@ import (
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/utils/ptr"
 
 	"k8s.io/client-go/kubernetes"
 )
@@ -35,13 +34,20 @@ var (
 )
 
 func main() {
-	kconfig := flag.String(clientcmd.RecommendedConfigPathFlag, "", "absolute path to the kubeconfig file")
-	debugOn := flag.Bool("debug", env.Bool("DEBUG", false), "enable or disable debug logs")
-	batchSize := flag.Int("batch-size", env.Int("BATCH_SIZE", 10), "Batch size")
-	batchPeriod := flag.Duration("batch-period", env.Duration("BATCH_PERIOD", 3*time.Second), "Batch period")
-	namespace := flag.String("namespace", env.String("NAMESPACE", "demo-system"), "Namespace")
-	selector := flag.String("label-selector", env.String("SELECTOR", "app=snowplow"), "Pod label selector")
-	etcdServers := flag.String("etcd-servers", env.String("EVENTSSE_ETCD_SERVERS", "localhost:2379"), "etcd endpoints")
+	kconfig := flag.String(clientcmd.RecommendedConfigPathFlag, "", "Absolute path to the kubeconfig file")
+	debugOn := flag.Bool("debug", env.Bool("DEBUG", false), "Enable or disable debug logs")
+	batchSize := flag.Int("batch-size", env.Int("BATCH_SIZE", 20),
+		"Maximum number of log entries to send in a single batch to the destination backend.")
+	batchPeriod := flag.Duration("batch-period", env.Duration("BATCH_PERIOD", 5*time.Second),
+		"Maximum time to wait before flushing a batch, even if the batch is not full.")
+	namespace := flag.String("namespace", env.String("NAMESPACE", "demo-system"),
+		"Kubernetes namespace to watch for pods and collect logs from.")
+	selector := flag.String("label-selector", env.String("SELECTOR", "app=snowplow"),
+		"Label selector used to filter which pods to watch for log collection.")
+	etcdServers := flag.String("etcd-servers", env.String("ETCD_SERVERS", "localhost:2379"),
+		"Comma-separated list of etcd endpoints used to store and retrieve logs.")
+	logChanSize := flag.Int("log-chan-size", env.Int("LOG_CHAN_SIZE", 1000),
+		"Size of the buffered channel used to queue log entries before processing. A higher value allows better handling of bursts, but increases memory usage. The retry queue size is derived proportionally from this value.")
 
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), "Flags:")
@@ -72,14 +78,6 @@ func main() {
 	if strings.TrimSpace(*selector) == "" {
 		log.Error("pod label selector cannot be empty")
 		os.Exit(1)
-	}
-
-	if *batchSize < 10 {
-		batchSize = ptr.To(10)
-	}
-
-	if *batchPeriod <= 0 {
-		batchPeriod = ptr.To(2 * time.Second)
 	}
 
 	var cfg *rest.Config
@@ -116,6 +114,7 @@ func main() {
 		LabelSelector: *selector,
 		BatchPeriod:   *batchPeriod,
 		BatchSize:     *batchSize,
+		LogChanSize:   *logChanSize,
 	})
 
 	err = manager.Start(ctx, &wg, writers.Etcd(etcdClient))

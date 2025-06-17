@@ -8,15 +8,21 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+const (
+	defaultTimeout = 5 * time.Minute
+)
+
 func NewEtcdClient(endpoints []string) (cli *clientv3.Client, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
+	opts := clientv3.Config{
+		Endpoints:   endpoints,
+		DialTimeout: 2 * time.Second,
+	}
+
 	err = retryWithContext(ctx, 5, 2*time.Second, func() error {
-		cli, err = clientv3.New(clientv3.Config{
-			Endpoints:   endpoints,
-			DialTimeout: 2 * time.Second,
-		})
+		cli, err = clientv3.New(opts)
 		return err
 	})
 
@@ -29,7 +35,7 @@ func NewEtcdClient(endpoints []string) (cli *clientv3.Client, err error) {
 
 func retryWithContext(ctx context.Context, attempts int, delay time.Duration, fn func() error) error {
 	var err error
-	for i := 0; i < attempts; i++ {
+	for range attempts {
 		// Check if context was canceled or timed out
 		if ctx.Err() != nil {
 			return ctx.Err()

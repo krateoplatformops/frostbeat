@@ -15,6 +15,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const (
+	defaultLogChanSize   = 500
+	defaultBatchSize     = 20
+	defaultBatchPeriod   = 5 * time.Second
+	defaultRetryChanSize = 10
+)
+
 type PodLogManager struct {
 	clientset     *kubernetes.Clientset
 	namespace     string
@@ -45,6 +52,8 @@ type PodLogManagerOptions struct {
 	LabelSelector string
 	BatchPeriod   time.Duration
 	BatchSize     int
+	LogChanSize   int
+	RetryChanSize int
 	Logger        *slog.Logger
 }
 
@@ -55,6 +64,20 @@ func NewPodLogManager(opts PodLogManagerOptions) *PodLogManager {
 		}))
 	}
 
+	if opts.BatchSize < defaultBatchSize {
+		opts.BatchSize = defaultBatchSize
+	}
+
+	if opts.BatchPeriod <= 1*time.Second {
+		opts.BatchPeriod = defaultBatchPeriod
+	}
+
+	if opts.LogChanSize < defaultLogChanSize {
+		opts.LogChanSize = defaultLogChanSize
+	}
+
+	opts.RetryChanSize = max(int(opts.LogChanSize/100), defaultRetryChanSize)
+
 	return &PodLogManager{
 		clientset:     opts.Clientset,
 		namespace:     opts.Namespace,
@@ -63,8 +86,8 @@ func NewPodLogManager(opts PodLogManagerOptions) *PodLogManager {
 		batchPeriod: opts.BatchPeriod,
 		batchSize:   opts.BatchSize,
 
-		logChan:   make(chan string, 100),
-		retryChan: make(chan []string, 10),
+		logChan:   make(chan string, opts.LogChanSize),
+		retryChan: make(chan []string, opts.RetryChanSize),
 
 		streamCancelMap: make(map[string]context.CancelFunc),
 
@@ -93,7 +116,28 @@ func (m *PodLogManager) Start(ctx context.Context, wg *sync.WaitGroup, writer wr
 		m.startRetryHandler()
 	}()
 
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.monitorPressure()
+	}()
+
 	return m.startPodWatcher()
+}
+
+func (m *PodLogManager) Shutdown() {
+	m.log.Info("shutting down")
+	m.cancel()
+
+	m.streamCancelMu.Lock()
+	for name, cancel := range m.streamCancelMap {
+		m.log.Info("stopping logs streamer for pod", slog.Any("name", name))
+		cancel()
+	}
+	m.streamCancelMu.Unlock()
+
+	close(m.logChan)
+	close(m.retryChan)
 }
 
 // startPodWatcher starts watcher and streamer
@@ -261,17 +305,19 @@ func (m *PodLogManager) startRetryHandler() {
 	}
 }
 
-func (m *PodLogManager) Shutdown() {
-	m.log.Info("shutting down")
-	m.cancel()
+func (m *PodLogManager) monitorPressure() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
 
-	m.streamCancelMu.Lock()
-	for name, cancel := range m.streamCancelMap {
-		m.log.Info("stopping logs streamer for pod", slog.Any("name", name))
-		cancel()
+	for {
+		select {
+		case <-ticker.C:
+			usage := float64(len(m.logChan)) / float64(cap(m.logChan))
+			if usage > 0.8 {
+				m.log.Warn("logChan nearing capacity", slog.Float64("usage", usage))
+			}
+		case <-m.ctx.Done():
+			return
+		}
 	}
-	m.streamCancelMu.Unlock()
-
-	close(m.logChan)
-	close(m.retryChan)
 }
