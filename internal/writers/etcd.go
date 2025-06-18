@@ -13,9 +13,9 @@ import (
 
 type EtcdOption func(w *etcdWriterImpl)
 
-func TTL(ttl int) EtcdOption {
+func TTL(ttl time.Duration) EtcdOption {
 	return func(w *etcdWriterImpl) {
-		w.ttl = ttl
+		w.ttl = int64(ttl.Seconds())
 	}
 }
 
@@ -53,7 +53,7 @@ const (
 type etcdWriterImpl struct {
 	client  *clientv3.Client
 	timeOut time.Duration
-	ttl     int
+	ttl     int64
 	logger  *slog.Logger
 }
 
@@ -94,7 +94,7 @@ func (w *etcdWriterImpl) WriteBatch(batch []string) error {
 		opopt := []clientv3.OpOption{}
 		if w.ttl > 0 {
 			lease := clientv3.NewLease(w.client)
-			res, err := lease.Grant(context.Background(), int64(w.ttl))
+			res, err := lease.Grant(context.Background(), w.ttl)
 			if err == nil {
 				opopt = append(opopt, clientv3.WithLease(res.ID))
 			}
