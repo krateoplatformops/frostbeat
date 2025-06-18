@@ -48,6 +48,8 @@ func main() {
 		"Comma-separated list of etcd endpoints used to store and retrieve logs.")
 	logChanSize := flag.Int("log-chan-size", env.Int("LOG_CHAN_SIZE", 1000),
 		"Size of the buffered channel used to queue log entries before processing. A higher value allows better handling of bursts, but increases memory usage. The retry queue size is derived proportionally from this value.")
+	ttl := flag.Duration("ttl", env.Duration("TTL", 48*time.Hour),
+		"TTL (Time-To-Live) duration for keys stored in etcd. After this period, keys expire and are removed automatically. Use duration format (e.g., \"24h\", \"30m\"). Zero or negative disables TTL.")
 
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), "Flags:")
@@ -117,7 +119,7 @@ func main() {
 		LogChanSize:   *logChanSize,
 	})
 
-	err = manager.Start(ctx, &wg, writers.Etcd(etcdClient))
+	err = manager.Start(ctx, &wg, writers.Etcd(etcdClient, writers.TTL(*ttl)))
 	if err != nil {
 		log.Error("unable to start PodLogManager", slog.Any("err", err))
 		os.Exit(1)
