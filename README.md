@@ -94,4 +94,4 @@ In the context of the overall system:
 | NAMESPACE            | demo-system       | Kubernetes namespace to watch for pods and collect logs from.|
 | SELECTOR             | app=snowplow      | Label selector to filter pods for log collection.            |
 | ETCD_SERVERS         | localhost:2379    | Comma-separated list of etcd endpoints for log storage.      |
-| ETCD_SERVERS         | 48h               | TTL (Time-To-Live) duration for keys stored in etcd.         |
+| TTL                  | 48h               | TTL (Time-To-Live) duration for keys stored in etcd.         |
